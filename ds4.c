@@ -26154,6 +26154,9 @@ int ds4_session_eval_speculative_argmax(ds4_session *s, int first_token,
     int draft_cap = e->mtp_draft_tokens;
     if (draft_cap > max_tokens - n_accept) draft_cap = max_tokens - n_accept;
     if (draft_cap > accepted_cap - n_accept) draft_cap = accepted_cap - n_accept;
+    /* The batched verifier cannot verify more rows than the prefill scratch
+     * holds, and at depth 2 a capacity rejection has no fallback. */
+    if (draft_cap > (int)s->graph.prefill_cap) draft_cap = (int)s->graph.prefill_cap;
     int room = s->ctx_size - s->checkpoint.len;
     if (draft_cap > room - 1) draft_cap = room - 1;
     if (draft_cap <= 0) return n_accept;
