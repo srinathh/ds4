@@ -1257,3 +1257,26 @@ first answer:
   logit/model issues.
 - `ds4-server --trace` writes the rendered prompts, cache decisions, generated
   text, and tool-parser events for a whole agent session.
+
+  ## OpenClaw Usage Notes
+  OpenClaw's default configuration causes a
+  [Message Envelope](https://docs.openclaw.ai/date-time/) to be sent with every
+  message that injects a timestamp whose location moves with every request. This
+  can cause heavy cache misses. If you are using a standard channels, turning off
+  the message envelope in `openclaw.json` should massively improve cache hits with
+  ds4. Increasing timeout also helps in cases where disk reload happens
+  
+  ```
+    "agents": {
+      "defaults": {
+        "timeoutSeconds": 1200,
+        "envelopeTimestamp": "off",
+        "envelopeElapsed": "off",
+        "userTimezone": "<your timezone>"
+      }
+    }
+  ```
+
+  In cases of non-standard channels - there's an additional function `injectTimestamp(message, opts)`
+  in `src/gateway/server-methods/agent-timestamp.ts` that does not respect the above options. This is
+  likley an upstream bug but till it's fixed, your coding agent should be able to trivially patch.
