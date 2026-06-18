@@ -1,0 +1,47 @@
+# Keep the build context small: the Dockerfile does `COPY . /ds4`, so without this
+# the whole working tree (incl. large local-only dirs like data/ traces and gguf/
+# models) would be shipped to the daemon. make cuda-spark needs only *.c/*.h/Makefile.
+.git
+
+# Local-only dirs (mirror .git/info/exclude)
+docs/
+data/
+gguf/
+misc/
+.claude/
+.agents/
+.antigravity/
+scripts/
+
+# Build artifacts (force a clean compile inside the image)
+ds4
+ds4-server
+ds4-bench
+ds4-eval
+ds4-agent
+ds4_native
+ds4_server_test
+ds4_test
+*.o
+*.dSYM/
+
+# Python / editor / OS cruft
+__pycache__/
+*.pyc
+.*.swp
+.DS_Store
+
+# Local tooling files
+CLAUDE.md
+AGENTS.md
+.agent-state.md
+Dockerfile.ds4
+docker-compose.ds4-flash-q2.yml
+
+# Deploy artifacts — not needed by `make cuda-spark`. Excluding them keeps the
+# `COPY . /ds4` layer cached when only compose/deploy config changes (otherwise
+# every compose edit forces a full recompile).
+Dockerfile
+.dockerignore
+docker-compose.yml
+deploy.sh
