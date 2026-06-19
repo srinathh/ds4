@@ -6,7 +6,9 @@ services:
     build: .
     image: ds4-flash:local
     container_name: ds4
-    restart: "no"            # flip to unless-stopped only after a verified OpenClaw turn
+    restart: unless-stopped  # auto-recover on boot (power outages recur; reboot reclaims the
+                             # GB10 leak before restart). Don't change to always: an in-place
+                             # crash restart against leaked memory needs the deploy.sh clean cycle.
     runtime: nvidia
     ipc: host
     shm_size: "1g"
