@@ -50,6 +50,10 @@ services:
       - "--kv-cache-boundary-align-tokens"
       - "2048"                         #   step 2048, finer resume granularity vs envelope
                                        #   churn (was 8192/4096 → fell back to coarse 24576)
+      - "--prefill-chunk"
+      - "2048"                         # A/B: match prefill chunk to the 2048 rung so continued
+                                       #   ckpts land every 2048 (resume ~30720 vs 28672).
+                                       #   default auto=4096; may cost prefill t/s — measuring.
       - "--warm-weights"
       # MTP (Multi-Token Prediction) speculative draft head — 3.6 GiB, Q4_K/Q8_0.
       - "--mtp"
