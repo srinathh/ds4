@@ -34,7 +34,9 @@ services:
       - /home/srinathh/ds4-kv:/kv     # persists across reboots; same engine sha
     command:
       - "-m"
-      - "/models/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf"
+      # Q2Q4 boosted model: layers 37-42 experts at Q4_K, other expert layers IQ2XXS gate/up +
+      # Q2_K down. ~91 GiB (vs IQ2XXS 81 GiB). Testing without MTP first to gauge memory headroom.
+      - "/models/DeepSeek-V4-Flash-Layers37-42Q4KExperts-OtherExpertLayersIQ2XXSGateUp-Q2KDown-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-fixed.gguf"
       - "-c"
       - "204800"                       # 200K context
       - "--host"
@@ -45,15 +47,16 @@ services:
       - "/kv"
       - "--kv-disk-space-mb"
       - "262144"                       # 256 GB disk-KV budget (NVMe has ~650 GB free)
+      # All KV chunk knobs at 4096 → cadence 4096 (keeper config from the interval/chunk study).
       - "--kv-cache-continued-interval-tokens"
-      - "8192"                         # rung densification: interval 8192 + align 4096 =
+      - "4096"
       - "--kv-cache-boundary-align-tokens"
-      - "4096"                         #   step 8192 = 2 prefill chunks, every rung lands
+      - "4096"
+      - "--prefill-chunk"
+      - "4096"
       - "--warm-weights"
-      # MTP (Multi-Token Prediction) speculative draft head — 3.6 GiB, Q4_K/Q8_0.
-      - "--mtp"
-      - "/models/DeepSeek-V4-Flash-MTP-Q4K-Q8_0-F32.gguf"
-      - "--mtp-draft"
-      - "2"
+      # MTP intentionally OMITTED for this build — Q2Q4 is +10 GiB vs IQ2XXS; first measure memory
+      # headroom without the 3.6 GiB draft head, then decide if MTP fits. (Was: --mtp <MTP gguf>
+      # --mtp-draft 2.)
       # NOTE: trace logging intentionally removed (was --trace /root/ds4-trace.txt
       # plus a ds4-trace.txt bind mount). Re-add only for debugging.
