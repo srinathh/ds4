@@ -356,17 +356,31 @@ def latest_session(sessions_dir: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def fetch_log_lines(host: str, since_epoch: int) -> str:
-    cmd = [
-        "ssh", host,
-        f"docker logs ds4 --since {since_epoch} 2>&1 | grep 'ds4-server:'"
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    # grep returns exit 1 when no lines match — that's fine
-    if result.returncode not in (0, 1):
+def _ssh_run(host: str, remote_cmd: str, allow_exit1: bool = False) -> str:
+    result = subprocess.run(["ssh", host, remote_cmd], capture_output=True, text=True)
+    if result.returncode not in ([0, 1] if allow_exit1 else [0]):
         print(f"!! SSH failed (exit {result.returncode}): {result.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
     return result.stdout
+
+
+def fetch_log_lines(host: str, since_epoch: int) -> str:
+    return _ssh_run(
+        host,
+        f"docker logs ds4 --since {since_epoch} 2>&1 | grep 'ds4-server:'",
+        allow_exit1=True,  # grep exits 1 when no lines match
+    )
+
+
+def pull_trace(host: str, trace_file: str) -> None:
+    """SCP the live trace from gx10 into the local trace file."""
+    result = subprocess.run(
+        ["scp", f"{host}:~/ds4-trace.txt", trace_file],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"!! SCP trace failed: {result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
 
 
 def read_trace_slice(trace_file: str, byte_offset: int) -> tuple[str, int]:
@@ -495,39 +509,33 @@ def cmd_init(args: argparse.Namespace, cfg: dict) -> int:
     sessions_dir = cfg["sessions_dir"]
     host = args.host or cfg["host"]
 
+    offline = bool(args.log_file)
+
     # establish log anchor
-    if args.log_file:
+    if offline:
         log_anchor_epoch = 0  # offline: we'll read the whole file
         print(f"Offline mode: log anchor = start of file ({args.log_file})")
     else:
-        result = subprocess.run(
-            ["ssh", host, "date +%s"], capture_output=True, text=True
-        )
-        if result.returncode != 0:
-            print(f"!! SSH date failed: {result.stderr.strip()}", file=sys.stderr)
-            return 1
-        log_anchor_epoch = int(result.stdout.strip())
+        log_anchor_epoch = int(_ssh_run(host, "date +%s").strip())
         print(f"Log anchor: epoch {log_anchor_epoch} on {host}")
 
-    # establish trace anchor
-    if not Path(trace_file).exists():
-        print(f"!! Trace file not found: {trace_file}", file=sys.stderr)
-        print("   Run: /trace-update  to pull it from gx10 first.", file=sys.stderr)
-        return 1
-
-    if args.log_file:
-        # offline mode: start trace from beginning so turn reads the whole file
+    # pull trace from gx10, then anchor at its end
+    if offline:
+        if not Path(trace_file).exists():
+            print(f"!! Trace file not found: {trace_file}", file=sys.stderr)
+            return 1
         trace_byte_offset = 0
         trace_next_req = 1
     else:
+        print(f"Pulling trace from {host} …")
+        pull_trace(host, trace_file)
+        file_size = os.path.getsize(trace_file)
+        print(f"Trace pulled: {file_size / 1024:.1f} KB")
         with open(trace_file, "rb") as f:
-            f.seek(0, 2)  # seek to end
+            f.seek(0, 2)
             trace_byte_offset = f.tell()
-
-        # find last request number in trace
         trace_next_req = 1
         with open(trace_file, "rb") as f:
-            # read last 4096 bytes to find the tail request number
             tail_size = min(4096, trace_byte_offset)
             f.seek(max(0, trace_byte_offset - tail_size))
             tail = f.read().decode("utf-8", errors="replace")
@@ -572,15 +580,17 @@ def cmd_turn(args: argparse.Namespace, cfg: dict) -> int:
 
     print(f"Processing turn {turn_n:03d} …")
 
-    # --- fetch log lines ---
+    # --- fetch log lines and pull trace from gx10 ---
     if log_file_override:
         log_text = Path(log_file_override).read_text(encoding="utf-8", errors="replace")
-        # in offline mode: first turn gets everything; subsequent turns get nothing
+        # offline mode: first turn gets everything; subsequent turns get nothing
         if state["turn_count"] > 0:
             print("!! Offline mode only supports turn 1 (whole file). Subsequent turns need live SSH.")
             log_text = ""
     else:
         log_text = fetch_log_lines(host, state["log_anchor_epoch"])
+        print(f"  pulling trace from {host} …")
+        pull_trace(host, trace_file)
 
     # --- read new trace slice ---
     trace_text, new_trace_offset = read_trace_slice(trace_file, state["trace_byte_offset"])
