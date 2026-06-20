@@ -32,6 +32,7 @@ services:
     volumes:
       - /home/srinathh/ds4/gguf:/models:ro
       - /home/srinathh/ds4-kv:/kv     # persists across reboots; same engine sha
+      - /home/srinathh/ds4-trace.txt:/root/ds4-trace.txt  # trace log; pull via /trace-update
     command:
       - "-m"
       # Q2Q4 boosted model: layers 37-42 experts at Q4_K, other expert layers IQ2XXS gate/up +
@@ -58,5 +59,5 @@ services:
       # MTP intentionally OMITTED for this build — Q2Q4 is +10 GiB vs IQ2XXS; first measure memory
       # headroom without the 3.6 GiB draft head, then decide if MTP fits. (Was: --mtp <MTP gguf>
       # --mtp-draft 2.)
-      # NOTE: trace logging intentionally removed (was --trace /root/ds4-trace.txt
-      # plus a ds4-trace.txt bind mount). Re-add only for debugging.
+      - "--trace"
+      - "/root/ds4-trace.txt"
