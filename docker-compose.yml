@@ -47,7 +47,7 @@ services:
       - "--kv-disk-dir"
       - "/kv"
       - "--kv-disk-space-mb"
-      - "262144"                       # 256 GB disk-KV budget (NVMe has ~650 GB free)
+      - "409600"                       # 400 GB disk-KV budget (NVMe has ~650 GB free)
       # All KV chunk knobs at 4096 → cadence 4096 (keeper config from the interval/chunk study).
       - "--kv-cache-continued-interval-tokens"
       - "4096"
